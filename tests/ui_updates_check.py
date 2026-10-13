@@ -19,15 +19,23 @@ def main():
             t = h.gateway.rpc.call('thread/start', {'cwd': str(h.work), 'fixtureName': name,
                 'fixtureSource': source, 'fixturePreview': preview})['thread']
             h.gateway._adopt(t); return t['id']
-        coding = create('Manipulation 项目开发', preview='debug code')
+        coding = create('示例项目开发', preview='debug code')
         other = create('网页开发', preview='web code')
         empty = create()
-        experiment = create('实验批任务', 'exec', 'simulation input')
+        experiment = create('后台批任务', 'exec', 'batch input')
         child = create('子代理代码检查', {'subAgent': {'thread_spawn': {}}}, 'review')
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=['--no-sandbox'], ignore_default_args=['--disable-dev-shm-usage'])
             phone = browser.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
             desk = browser.new_page(viewport={'width': 1280, 'height': 900})
+            def send(text):
+                phone.locator('#prompt').fill(text)
+                with phone.expect_response(lambda response: response.url.endswith('/api/threads/' + coding + '/message') and response.request.method == 'POST') as pending:
+                    phone.locator('#send').click()
+                response = pending.value
+                assert response.status == 200
+                return response.json()['turnId']
+
             errors = []
             for tab in (phone, desk):
                 tab.on('pageerror', lambda e: errors.append(str(e)))
@@ -53,9 +61,11 @@ def main():
             # A direct link still opens hidden history; hiding never removes it.
             phone.goto(h.web.origin+'/?thread='+coding)
             expect(phone.locator('#prompt')).to_be_enabled()
-            phone.locator('#prompt').fill('hang'); phone.locator('#send').click()
+            # The activity indicator also covers submitting. Wait for the actual
+            # turn/start response before injecting events for that native turn.
+            turn = send('hang')
             expect(phone.locator('#activity')).to_be_visible()
-            turn = h.gateway.thread(coding)['turn_id']
+            assert turn and turn != 'starting'
             error = {'message': 'Reconnecting... 1/8', 'additionalDetails': 'HTTP 403: Client not allowed'}
             def event(method, params): h.gateway.rpc.call('fixture/event', {'method': method, 'params': params})
             event('error', {'threadId': coding, 'turnId': turn, 'error': error, 'willRetry': True})
@@ -69,11 +79,11 @@ def main():
             phone.reload()
             expect(phone.locator('.turn-result[data-status="failed"]')).to_contain_text('Client not allowed')
             expect(phone.locator('#run-state')).to_have_text('执行失败')
-            phone.locator('#prompt').fill('hello'); phone.locator('#send').click()
+            send('hello')
             expect(phone.locator('.turn-result[data-status="completed"]')).to_have_count(1)
             phone.reload()
             expect(phone.locator('.turn-result[data-status="completed"]')).to_contain_text('本轮已完成')
-            phone.locator('#prompt').fill('hang'); phone.locator('#send').click()
+            send('hang')
             expect(phone.locator('#stop')).to_be_visible(); phone.locator('#stop').click()
             expect(phone.locator('.turn-result[data-status="interrupted"]')).to_contain_text('本轮已中断')
             assert not errors, errors
