@@ -1,0 +1,15 @@
+# Install on the agent server, alongside codex-remote.service.
+# Configure the SSH alias `codex-relay` first, including verified host key.
+[Unit]
+Description=Codex Remote reverse SSH tunnel
+After=network-online.target codex-remote.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ssh -NT -o BatchMode=yes -o StrictHostKeyChecking=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -R 127.0.0.1:18765:127.0.0.1:8765 codex-relay
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

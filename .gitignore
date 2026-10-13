@@ -1,0 +1,33 @@
+# Local development and release outputs
+.venv/
+.browsers/
+.browser-tmp/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+test-results/
+.coverage
+.pytest_cache/
+# Runtime data and local configuration must live outside the repository.
+.state/
+state/
+backups/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+*.sqlite3*
+*.db
+*.db-*
+*.log
+*.pem
+*.key
+access-token
+auth.json
+config.toml
+*.generated
+*.local
+*.local.*

@@ -1,0 +1,10 @@
+# Add to ~/.ssh/config on the agent server; use your actual relay details.
+Host codex-relay
+    HostName YOUR_RELAY_HOST
+    User YOUR_RELAY_USER
+    Port 22
+    IdentityFile ~/.ssh/codex-relay-ed25519
+    IdentitiesOnly yes
+    StrictHostKeyChecking yes
+    ServerAliveInterval 30
+    ServerAliveCountMax 3

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#146b5b">
+  <script src="/locales/zh-CN.js"></script>
+  <script src="/i18n.js"></script>
+  <script src="/theme.js"></script>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Codex Remote">
+  <title data-i18n="Codex Remote · Remote workspace">Codex Remote · Remote workspace</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/commands.css">
+  <script src="/vendor/markdown-it/markdown-it.min.js" defer></script>
+  <script src="/vendor/katex/katex.min.js" defer></script>
+  <script src="/vendor/highlight/highlight.min.js" defer></script>
+  <script src="/diagrams.js" defer></script>
+  <script src="/markdown.js" defer></script>
+  <script src="/app.js" defer></script>
+  <script src="/activity.js" defer></script>
+  <script src="/features.js" defer></script>
+  <script src="/commands.js" defer></script>
+</head>
+<body>
+  <section id="login" class="login">
+    <button id="login-theme-toggle" class="icon-button theme-toggle login-theme" type="button" data-theme-toggle aria-label="Switch to dark mode" data-i18n-aria-label="Switch to dark mode">☾</button>
+    <div class="login-card">
+      <select class="language-select" aria-label="Language" data-language-select><option value="en">English</option><option value="zh-CN">简体中文</option></select>
+      <img src="/icon.svg" alt="" width="52" height="52">
+      <p class="eyebrow">YOUR WORK, WITH YOU</p>
+      <h1><span data-i18n="Keep working.">Keep working.</span><br><span data-i18n="Wherever you are.">Wherever you are.</span></h1>
+      <p class="muted"><span data-i18n="Connect to Codex on your server and continue from your phone.">Connect to Codex on your server and continue from your phone.</span></p>
+      <form id="login-form">
+        <label for="token"><span data-i18n="Gateway access token">Gateway access token</span></label>
+        <input id="token" type="password" autocomplete="current-password" required placeholder="Enter the access token generated on your server" data-i18n-placeholder="Enter the access token generated on your server">
+        <button class="primary" type="submit"><span data-i18n="Connect to workspace">Connect to workspace</span> <span aria-hidden="true">↗</span></button>
+      </form>
+      <p class="fine"><span data-i18n="Sign in with your gateway token. Your model API key stays on the server.">Sign in with your gateway token. Your model API key stays on the server.</span></p>
+      <p id="login-error" class="error" role="alert"></p>
+    </div>
+  </section>
+
+  <div id="app" class="app" hidden>
+    <button id="scrim" class="scrim" aria-label="Close conversation list" hidden data-i18n-aria-label="Close conversation list"></button>
+    <aside id="sidebar" class="sidebar">
+      <div class="brand"><img src="/icon.svg" alt="" width="32" height="32"><div><span>Codex Remote</span><small><span data-i18n="Your remote workspace">Your remote workspace</span></small></div><span class="tag">LIVE</span></div>
+      <button id="new-chat" class="new-chat"><span>＋</span> <span data-i18n="New conversation">New conversation</span> <span class="new-chat-arrow" aria-hidden="true">↗</span></button>
+      <div class="sidebar-tools"><button id="discover" class="small-button"><span data-i18n="Sync conversations">Sync conversations</span></button><button id="import-chat" class="small-button"><span data-i18n="Connect by ID">Connect by ID</span></button></div>
+      <input id="thread-search" type="search" placeholder="Search conversations" aria-label="Search conversations" data-i18n-placeholder="Search conversations" data-i18n-aria-label="Search conversations">
+      <label class="archive-filter"><input id="show-archived" type="checkbox"> <span data-i18n="Show archived conversations">Show archived conversations</span></label>
+      <label class="archive-filter"><input id="show-hidden" type="checkbox"> <span data-i18n="Show hidden conversations">Show hidden conversations</span> <span id="hidden-thread-count">0</span></label>
+      <div class="section-label"><span data-i18n="My conversations">My conversations</span> <span id="thread-count">0</span></div>
+      <nav id="threads" aria-label="Conversations" data-i18n-aria-label="Conversations"></nav>
+      <div class="sidebar-footer">
+        <div class="host-state"><span id="host-dot" class="dot"></span><span id="host-state"><span data-i18n="Connecting to server">Connecting to server</span></span></div>
+        <button id="logout" class="text-button"><span data-i18n="Sign out">Sign out</span></button>
+        <button id="settings-open" class="text-button"><span data-i18n="Devices and notifications">Devices and notifications</span></button>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <select class="language-select" aria-label="Language" data-language-select><option value="en">English</option><option value="zh-CN">简体中文</option></select>
+        <button id="menu" class="icon-button" aria-label="Open conversation list" data-i18n-aria-label="Open conversation list">☰</button>
+        <div class="heading"><h2 id="chat-title"><span data-i18n="Remote workspace">Remote workspace</span></h2><p id="chat-path"><span data-i18n="Tasks run on your server. Follow their progress here.">Tasks run on your server. Follow their progress here.</span></p></div>
+        <span id="run-state" class="status"><span data-i18n="Ready">Ready</span></span>
+        <button id="theme-toggle" class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark mode" data-i18n-aria-label="Switch to dark mode">☾</button>
+        <button id="thread-tools" class="icon-button" aria-label="Conversation actions" disabled data-i18n-aria-label="Conversation actions">⋯</button>
+      </header>
+      <div class="timeline-panel">
+        <div id="timeline" class="timeline" tabindex="0" aria-label="Conversation messages" data-i18n-aria-label="Conversation messages">
+          <section id="empty" class="empty">
+            <span class="empty-mark" aria-hidden="true">↗</span>
+            <p class="eyebrow">YOUR WORKSPACE, ANYWHERE</p>
+            <h1><span data-i18n="Pick up where you left off.">Pick up where you left off.</span></h1>
+            <p><span data-i18n="Choose a conversation to continue your work.">Choose a conversation to continue your work.</span><br><span data-i18n="Or start with a new idea.">Or start with a new idea.</span></p>
+            <button id="empty-new" class="primary"><span data-i18n="Start a conversation">Start a conversation</span></button>
+          </section>
+          <button id="older" class="small-button" hidden><span data-i18n="Load earlier messages">Load earlier messages</span></button>
+          <div id="messages" class="messages"></div>
+        </div>
+        <button id="jump-bottom" class="jump-bottom" type="button" aria-label="Jump to latest message" title="Jump to latest message" aria-controls="timeline" hidden data-i18n-aria-label="Jump to latest message" data-i18n-title="Jump to latest message">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-6-6 6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="bottom">
+        <section id="goal-panel" class="goal-panel" aria-label="Ongoing goal" hidden data-i18n-aria-label="Ongoing goal">
+          <div class="goal-heading"><span id="goal-status"></span><span id="goal-usage"></span></div>
+          <p id="goal-objective-preview"></p>
+          <div class="goal-actions"><button id="goal-toggle" type="button"><span data-i18n="Pause">Pause</span></button><button id="goal-edit" type="button"><span data-i18n="Edit">Edit</span></button><button id="goal-clear" type="button"><span data-i18n="Clear">Clear</span></button></div>
+        </section>
+        <div id="activity" class="activity" hidden>
+          <span class="activity-spinner" aria-hidden="true"></span>
+          <div class="activity-copy"><span id="activity-title" class="activity-title" role="status" aria-live="polite"></span><div id="activity-detail" class="activity-detail" hidden></div><div id="activity-time" class="activity-time"></div></div>
+        </div>
+        <div id="view-mode" class="view-mode" hidden><span id="view-description"><span data-i18n="Progress refreshes automatically. Connect or send a message to continue with live updates.">Progress refreshes automatically. Connect or send a message to continue with live updates.</span></span><button id="enable-control" class="small-button" type="button"><span data-i18n="Connect to live conversation">Connect to live conversation</span></button><button id="recover-chat" class="small-button" type="button" hidden><span data-i18n="Fork saved history">Fork saved history</span></button></div>
+        <div id="requests" class="requests" aria-live="polite"></div>
+        <div id="queue-list" class="queue-list"></div>
+        <p id="notice" class="notice" role="status"></p>
+        <form id="composer" class="composer">
+          <div id="slash-menu" class="slash-menu" hidden><div class="slash-heading"><span data-i18n="Command">Command</span> <span><span data-i18n="↑↓ to choose · Enter to run">↑↓ to choose · Enter to run</span></span></div><div id="slash-options" role="listbox" aria-label="Slash commands" data-i18n-aria-label="Slash commands"></div></div>
+          <div id="attachments" class="attachments"></div>
+          <p id="upload-status" class="composer-hint" role="status" aria-live="polite" hidden></p>
+          <label class="sr-only" for="prompt"><span data-i18n="Send to Codex on the server">Send to Codex on the server</span></label>
+          <textarea id="prompt" rows="2" maxlength="50000" enterkeyhint="send" placeholder="Describe a task, paste images or files, or type / for commands…" aria-describedby="composer-hint upload-status" aria-controls="slash-options" aria-expanded="false" disabled data-i18n-placeholder="Describe a task, paste images or files, or type / for commands…"></textarea>
+          <div class="composer-options">
+            <button id="attach-file" type="button" class="composer-icon" aria-label="Add attachment" title="Add attachment" data-i18n-aria-label="Add attachment" data-i18n-title="Add attachment">＋</button><input id="file-input" type="file" multiple hidden>
+            <button id="slash-open" type="button" class="composer-icon slash-open" aria-label="Open command menu" title="Slash commands" data-i18n-aria-label="Open command menu" data-i18n-title="Slash commands">/</button>
+            <button id="model-open" type="button" class="model-button" aria-label="Model settings" title="Model and reasoning effort" data-i18n-aria-label="Model settings" data-i18n-title="Model and reasoning effort"><span data-i18n="Model settings">Model settings</span></button>
+            <select id="message-mode" aria-label="Send mode" aria-describedby="composer-hint" data-i18n-aria-label="Send mode"><option value="auto" data-i18n="Follow up now">Follow up now</option><option value="queue" data-i18n="After this turn">After this turn</option><option value="send" data-i18n="New turn only">New turn only</option></select>
+            <button id="stop" type="button" class="stop" aria-label="Stop task" title="Stop task and queued messages" hidden data-i18n-aria-label="Stop task" data-i18n-title="Stop task and queued messages">■</button><button id="send" type="submit" class="send" aria-label="Send message" title="Send message" disabled data-i18n-aria-label="Send message" data-i18n-title="Send message">↑</button>
+          </div>
+          <div id="composer-hint" class="composer-hint"><span data-i18n="Choose or create a conversation first">Choose or create a conversation first</span></div>
+        </form>
+        <p class="footnote"><span data-i18n="Runs on your server">Runs on your server</span> <span>·</span> <span data-i18n="Tasks continue when your phone disconnects">Tasks continue when your phone disconnects</span></p>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="new-dialog">
+    <form id="new-form">
+      <div class="dialog-head"><h2><span data-i18n="Start a conversation">Start a conversation</span></h2><button id="close-dialog" type="button" class="icon-button" aria-label="Close" data-i18n-aria-label="Close">×</button></div>
+      <p class="muted"><span data-i18n="Choose the server directory where Codex will work.">Choose the server directory where Codex will work.</span></p>
+      <label for="workspace-quick"><span data-i18n="Quick selection">Quick selection</span></label><select id="workspace-quick" aria-label="Workspaces and recent projects" data-i18n-aria-label="Workspaces and recent projects"></select>
+      <label for="workspace"><span data-i18n="Working directory">Working directory</span></label>
+      <div class="workspace-input"><input id="workspace" required maxlength="4096" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste an absolute path on the server" aria-describedby="workspace-hint" data-i18n-placeholder="Paste an absolute path on the server"><button id="workspace-browse" type="button" class="small-button" aria-controls="workspace-browser"><span data-i18n="Browse directories">Browse directories</span></button></div>
+      <p id="workspace-hint" class="fine"><span data-i18n="Choose a subdirectory of an allowed workspace, or enter its absolute path.">Choose a subdirectory of an allowed workspace, or enter its absolute path.</span></p>
+      <section id="workspace-browser" class="workspace-browser" aria-label="Choose a server directory" hidden data-i18n-aria-label="Choose a server directory">
+        <div class="workspace-toolbar"><button id="workspace-parent" type="button" class="small-button" disabled><span data-i18n="↑ Parent directory">↑ Parent directory</span></button><label><input id="workspace-hidden" type="checkbox"> <span data-i18n="Show hidden directories">Show hidden directories</span></label></div>
+        <p id="workspace-location" class="workspace-location"></p>
+        <div id="workspace-entries" class="workspace-entries" aria-label="Subdirectories" data-i18n-aria-label="Subdirectories"></div>
+        <p id="workspace-status" class="fine" role="status"></p>
+        <button id="workspace-more" type="button" class="small-button" hidden><span data-i18n="Load more directories">Load more directories</span></button>
+      </section>
+      <label for="chat-name"><span data-i18n="Conversation name">Conversation name</span> <span class="muted"><span data-i18n="(optional)">(optional)</span></span></label><input id="chat-name" maxlength="100" placeholder="For example: review the test results" data-i18n-placeholder="For example: review the test results">
+      <p id="new-error" class="error" role="alert"></p>
+      <button type="submit" class="primary"><span data-i18n="Create conversation">Create conversation</span></button>
+    </form>
+  </dialog>
+  <dialog id="tools-dialog"><div class="dialog-head"><h2><span data-i18n="Conversation actions">Conversation actions</span></h2><button class="icon-button dialog-close" aria-label="Close" data-i18n-aria-label="Close">×</button></div><label for="rename-title"><span data-i18n="Conversation name">Conversation name</span></label><input id="rename-title" maxlength="100"><div class="action-grid"><button id="rename-chat" class="small-button"><span data-i18n="Save name">Save name</span></button><button id="fork-chat" class="small-button"><span data-i18n="Fork saved history">Fork saved history</span></button><button id="archive-chat" class="small-button"><span data-i18n="Archive conversation">Archive conversation</span></button><button id="visibility-chat" class="small-button"><span data-i18n="Hide from my conversations">Hide from my conversations</span></button><button id="resync-chat" class="small-button"><span data-i18n="Sync again">Sync again</span></button><button id="browse-files" class="small-button"><span data-i18n="Browse project files">Browse project files</span></button><a id="export-chat" class="small-button" download><span data-i18n="Export conversation">Export conversation</span></a></div><p class="fine"><span data-i18n="Create a new conversation from saved context. The original stays intact; unsaved progress is not copied.">Create a new conversation from saved context. The original stays intact; unsaved progress is not copied.</span></p><p id="thread-id" class="fine"></p><p id="tools-error" class="error" role="alert"></p></dialog>
+  <dialog id="import-dialog"><form id="import-form"><div class="dialog-head"><h2><span data-i18n="Connect to a server conversation">Connect to a server conversation</span></h2><button type="button" class="icon-button dialog-close" aria-label="Close" data-i18n-aria-label="Close">×</button></div><p class="muted"><span data-i18n="Enter a conversation ID from the same Codex daemon. Its directory must be in an allowed workspace.">Enter a conversation ID from the same Codex daemon. Its directory must be in an allowed workspace.</span></p><label for="import-id"><span data-i18n="Conversation ID">Conversation ID</span></label><input id="import-id" required autocomplete="off"><p id="import-error" class="error" role="alert"></p><button type="submit" class="primary"><span data-i18n="Connect and sync">Connect and sync</span></button></form></dialog>
+  <dialog id="model-dialog"><div class="dialog-head"><h2><span data-i18n="Model settings for the next turn">Model settings for the next turn</span></h2><button class="icon-button dialog-close" aria-label="Close" data-i18n-aria-label="Close">×</button></div><label for="model-select"><span data-i18n="Model">Model</span></label><select id="model-select"><option value="" data-i18n="Use current conversation">Use current conversation</option></select><label for="custom-model"><span data-i18n="Custom model name (optional)">Custom model name (optional)</span></label><input id="custom-model" placeholder="Enter a model supported by your provider" data-i18n-placeholder="Enter a model supported by your provider"><label for="effort-select"><span data-i18n="Reasoning effort">Reasoning effort</span></label><select id="effort-select"><option value="" data-i18n="Keep current settings">Keep current settings</option></select><p class="fine"><span data-i18n="Settings apply to new turns. Follow-ups and shared queues use the current model. Listed models still require provider access.">Settings apply to new turns. Follow-ups and shared queues use the current model. Listed models still require provider access.</span></p><p id="model-current" class="fine"></p><button id="model-save" class="primary"><span data-i18n="Save">Save</span></button></dialog>
+  <dialog id="settings-dialog">
+    <div class="dialog-head"><h2><span data-i18n="Devices and notifications">Devices and notifications</span></h2><button class="icon-button dialog-close" aria-label="Close" data-i18n-aria-label="Close">×</button></div>
+    <p id="connection-mode" class="muted"></p>
+    <h3><span data-i18n="Task notifications">Task notifications</span></h3>
+    <p class="fine"><span data-i18n="Receive a notification when a connected conversation finishes a turn or needs your response, including while the screen is locked or the page is closed.">Receive a notification when a connected conversation finishes a turn or needs your response, including while the screen is locked or the page is closed.</span></p>
+    <p id="push-status" class="fine" role="status" aria-live="polite"></p>
+    <div class="action-grid"><button id="push-enable" class="small-button"><span data-i18n="Enable notifications">Enable notifications</span></button><button id="push-test" class="small-button" disabled><span data-i18n="Send test notification">Send test notification</span></button><button id="push-disable" class="small-button"><span data-i18n="Disable notifications">Disable notifications</span></button></div>
+    <p id="push-feedback" class="fine" role="status" aria-live="polite"></p>
+    <p class="fine"><span data-i18n="iPhone requires iOS 16.4 or later. Add the HTTPS site to the home screen, open the installed app and allow notifications.">iPhone requires iOS 16.4 or later. Add the HTTPS site to the home screen, open the installed app and allow notifications.</span></p>
+    <h3><span data-i18n="Recent notifications">Recent notifications</span></h3><div id="notifications"></div>
+    <h3><span data-i18n="Attachment storage">Attachment storage</span></h3><p id="storage-status" class="fine"></p><button id="storage-cleanup" class="small-button" type="button"><span data-i18n="Clean up unsent attachments older than 7 days">Clean up unsent attachments older than 7 days</span></button>
+    <h3><span data-i18n="Signed-in devices">Signed-in devices</span></h3><div id="devices"></div><p id="settings-error" class="error" role="alert"></p>
+  </dialog>
+  <dialog id="files-dialog" class="wide-dialog"><div class="dialog-head"><h2><span data-i18n="Project files">Project files</span></h2><button class="icon-button dialog-close" aria-label="Close" data-i18n-aria-label="Close">×</button></div><p id="file-path" class="fine"></p><button id="files-parent" class="small-button"><span data-i18n="↑ Parent directory">↑ Parent directory</span></button><div id="file-list"></div><pre id="file-preview" hidden></pre><a id="file-download" class="small-button" hidden download><span data-i18n="Download file">Download file</span></a><p id="file-error" class="error" role="alert"></p></dialog>
+  <dialog id="goal-dialog" class="goal-dialog">
+    <div class="dialog-head"><h2><span data-i18n="Ongoing goal">Ongoing goal</span></h2><button type="button" class="icon-button dialog-close" aria-label="Close" data-i18n-aria-label="Close">×</button></div>
+    <p id="goal-dialog-status" class="fine"></p>
+    <form id="goal-form">
+      <label for="goal-objective"><span data-i18n="Objective and completion criteria">Objective and completion criteria</span></label><textarea id="goal-objective" rows="5" maxlength="4000" required placeholder="For example: fix the failing tests until they all pass, and record the changes and validation." data-i18n-placeholder="For example: fix the failing tests until they all pass, and record the changes and validation."></textarea>
+      <label for="goal-budget"><span data-i18n="Token budget (optional)">Token budget (optional)</span></label><input id="goal-budget" type="number" min="1" max="9007199254740991" step="1" inputmode="numeric" placeholder="Leave blank for no budget on a new goal" data-i18n-placeholder="Leave blank for no budget on a new goal">
+      <p class="fine"><span data-i18n="Goals continue on the server. A blank budget keeps an existing budget. Editing the objective resets usage while preserving pause state. Pause and clear follow native semantics; use Stop to interrupt execution.">Goals continue on the server. A blank budget keeps an existing budget. Editing the objective resets usage while preserving pause state. Pause and clear follow native semantics; use Stop to interrupt execution.</span></p>
+      <p id="goal-error" class="error" role="alert"></p><button id="goal-save" class="primary" type="submit"><span data-i18n="Start goal">Start goal</span></button>
+    </form>
+  </dialog>
+  <dialog id="command-help" class="command-help"><div class="dialog-head"><h2><span data-i18n="Web commands">Web commands</span></h2><button type="button" class="icon-button dialog-close" aria-label="Close" data-i18n-aria-label="Close">×</button></div><p class="fine"><span data-i18n="Type / to choose a command, or send /goal followed by an objective. Only supported commands are executed. Use // to send a slash command as literal text.">Type / to choose a command, or send /goal followed by an objective. Only supported commands are executed. Use // to send a slash command as literal text.</span></p><div id="command-help-list"></div></dialog>
+  <dialog id="command-status"><div class="dialog-head"><h2><span data-i18n="Conversation status">Conversation status</span></h2><button type="button" class="icon-button dialog-close" aria-label="Close" data-i18n-aria-label="Close">×</button></div><dl id="command-status-content"></dl></dialog>
+  <dialog id="permission-dialog"><div class="dialog-head"><h2><span data-i18n="Conversation permissions">Conversation permissions</span></h2><button type="button" class="icon-button dialog-close" aria-label="Close" data-i18n-aria-label="Close">×</button></div><p id="permission-current"></p><p class="muted"><span data-i18n="Full Access lets Codex read and write files, run commands and access the network as the server user, without individual approvals.">Full Access lets Codex read and write files, run commands and access the network as the server user, without individual approvals.</span></p><p id="permission-default" class="fine"></p><p id="permission-timing" class="fine"></p><p id="permission-error" class="error" role="alert"></p><button id="permission-full" class="primary"><span data-i18n="Enable Full Access">Enable Full Access</span></button></dialog>
+</body>
+</html>

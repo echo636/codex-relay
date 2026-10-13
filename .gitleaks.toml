@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+# This exact upstream Mermaid expression is executable code, not a credential.
+# Its full bundle is pinned by npm integrity and assets.sha256.json.
+[[allowlists]]
+description = "Upstream Mermaid atlas counter expression"
+regexTarget = "match"
+regexes = ['''^m\.keyCount,v=m\.atlasCount;$''']

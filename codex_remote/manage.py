@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""Install, diagnose, and generate relay configuration without storing API keys."""
+import argparse
+import importlib.util
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import shlex
+import shutil
+import sqlite3
+import subprocess
+import sys
+import tempfile
+from codex_remote import __version__
+from codex_remote.storage import backup_state, restore_state, offline, clean_uploads
+from urllib.parse import urlsplit
+
+ROOT = Path(__file__).resolve().parent
+
+
+def systemd_arg(value, expand_dollar=True):
+    # systemd has its own tokenization, percent specifiers, and dollar expansion.
+    value = str(value)
+    if any(ord(c) < 32 for c in value):
+        raise ValueError('Service arguments must not contain control characters.')
+    value = value.replace('\\', '\\\\').replace('"', '\\"').replace('%', '%%')
+    return '"' + (value.replace('$', '$$') if expand_dollar else value) + '"'
+
+
+def systemd_directory(value):
+    # WorkingDirectory is a single path, not an ExecStart argument list: quotes are literal.
+    value = str(value)
+    if any(ord(c) < 32 for c in value):
+        raise ValueError('Service directories must not contain control characters.')
+    return value.replace('%', '%%')
+
+
+def write_private(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    path.chmod(0o600)
+
+
+def doctor(args):
+    # Deliberately omit paths, user names, host names, sockets, environment and logs.
+    status = {"gatewayVersion": __version__, "python": sys.version.split()[0], "platform": sys.platform}
+    status['dependencies'] = {name: bool(importlib.util.find_spec(name)) for name in ('websockets', 'jsonschema', 'pywebpush', 'cryptography')}
+    binary = shutil.which(args.codex)
+    status['codexFound'] = bool(binary)
+    if binary:
+        try:
+            result = subprocess.run([binary, '--version'], capture_output=True, text=True, timeout=15)
+            version = re.search(r'\b\d+\.\d+\.\d+\b', result.stdout)
+            status['codexVersion'] = version.group() if version else 'unknown'
+        except Exception:
+            status['codexVersion'] = 'unavailable'
+    parent = args.state
+    while not parent.exists():
+        parent = parent.parent
+    usage = shutil.disk_usage(parent)
+    status['storage'] = {'stateExists': args.state.is_dir(), 'freeBytes': usage.free,
+                         'lowSpace': usage.free < 1024**3, 'quotaChecked': False}
+    try:
+        with tempfile.TemporaryFile(dir=parent) as probe:
+            probe.write(b'gateway storage probe'); probe.flush(); os.fsync(probe.fileno())
+        status['storage']['writable'] = True
+    except OSError:
+        status['storage']['writable'] = False
+    status['storage']['filesystem'] = 'unknown'
+    if Path('/proc/self/mountinfo').is_file():
+        matches = []
+        for line in Path('/proc/self/mountinfo').read_text().splitlines():
+            fields = line.split()
+            mount = Path(fields[4].replace('\\040', ' '))
+            if parent == mount or mount in parent.parents:
+                matches.append((len(str(mount)), fields[fields.index('-')+1]))
+        if matches:
+            status['storage']['filesystem'] = max(matches)[1]
+    status['storage']['networkFilesystem'] = status['storage']['filesystem'].startswith(('nfs','cifs','smb','fuse'))
+    db = args.state/'gateway.sqlite3'
+    if db.exists():
+        try:
+            connection = sqlite3.connect(db.as_uri()+'?mode=ro', uri=True, timeout=2)
+            try:
+                status['storage']['schemaVersion'] = connection.execute('PRAGMA user_version').fetchone()[0]
+                status['storage']['databaseReadable'] = True
+            finally:
+                connection.close()
+        except sqlite3.Error:
+            status['storage']['databaseReadable'] = False
+    print(json.dumps(status, ensure_ascii=False, indent=2))
+    return 0 if all(status['dependencies'].values()) and binary and status['storage']['writable'] else 1
+
+
+def install(args):
+    if not args.workspace:
+        raise ValueError('At least one --workspace is required.')
+    if args.socket and args.transport != 'shared':
+        raise ValueError('--socket requires explicit --transport shared.')
+    if args.browse_existing and args.transport != 'shared':
+        raise ValueError('--browse-existing requires --transport shared.')
+    codex = shutil.which(args.codex)
+    if not codex:
+        raise ValueError('Codex CLI was not found.')
+    python = Path(sys.executable).absolute()
+    url = urlsplit(args.origin)
+    if url.scheme not in ('http', 'https') or not url.netloc or url.path or url.query or url.fragment or url.username:
+        raise ValueError('--origin must be a complete http(s)://host[:port] address.')
+    args.state.mkdir(parents=True, exist_ok=True, mode=0o700); args.state.chmod(0o700)
+    argv = [str(python), '-m', 'codex_remote', '--codex', codex, '--origin', args.origin,
+            '--host', args.host, '--port', str(args.port), '--state', str(args.state),
+            '--sandbox', args.sandbox, '--approval', args.approval, '--transport', args.transport]
+    for workspace in args.workspace:
+        p = Path(workspace).expanduser().resolve(strict=True)
+        if not p.is_dir():
+            raise ValueError('A workspace must be a directory.')
+        argv += ['--workspace', str(p)]
+    if args.socket:
+        argv += ['--socket', str(Path(args.socket).expanduser().resolve())]
+    if args.browse_existing:
+        argv += ['--browse-existing']
+    if args.push_subject:
+        argv += ['--push-subject', args.push_subject]
+    unit_dir = Path.home()/'.config/systemd/user'
+    filename = unit_dir/'codex-remote.service'
+    if filename.exists() and not filename.read_text().startswith('# Generated by Codex Remote'):
+        raise ValueError('An existing service file was not generated by this tool. Inspect and preserve it first.')
+    environment = 'Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"\n'
+    if args.env_file:
+        p = Path(args.env_file).expanduser().resolve(strict=True)
+        environment += 'EnvironmentFile=' + systemd_arg(p, expand_dollar=False) + '\n'
+    if args.relay:
+        if not re.fullmatch(r'[A-Za-z0-9_@.:-]+', args.relay) or args.relay.startswith('-'):
+            raise ValueError('--relay must be an existing SSH alias or user@host.')
+        ssh = shutil.which('ssh')
+        if not ssh:
+            raise ValueError('SSH was not found.')
+        tunnel_path = unit_dir/'codex-remote-tunnel.service'
+        if tunnel_path.exists() and not tunnel_path.read_text().startswith('# Generated by Codex Remote'):
+            raise ValueError('An existing tunnel unit was not generated by this tool. Inspect it first.')
+    unit = '# Generated by Codex Remote\n[Unit]\nDescription=Codex Remote\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\n'
+    unit += 'WorkingDirectory=' + systemd_directory(ROOT) + '\nExecStart=' + ' '.join(map(systemd_arg, argv)) + '\n'
+    unit += environment + 'Restart=on-failure\nRestartSec=5\nUMask=0077\nTimeoutStopSec=25\n\n[Install]\nWantedBy=default.target\n'
+    write_private(filename, unit)
+    services = ['codex-remote.service']
+    if args.relay:
+        forward = f'127.0.0.1:{args.relay_port}:127.0.0.1:{args.port}'
+        ssh_args = [ssh, '-NT', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ExitOnForwardFailure=yes',
+                    '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=3', '-R', forward, args.relay]
+        tunnel = '# Generated by Codex Remote\n[Unit]\nDescription=Codex Remote relay tunnel\nAfter=network-online.target codex-remote.service\n\n[Service]\nExecStart=' + ' '.join(map(systemd_arg, ssh_args)) + '\nRestart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n'
+        write_private(unit_dir/'codex-remote-tunnel.service', tunnel)
+        services.append('codex-remote-tunnel.service')
+    print('Generated services: ', ', '.join(str(unit_dir/s) for s in services))
+    print('Access URL: ', args.origin)
+    print('Access token file: ', args.state/'access-token')
+    if args.start:
+        subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True)
+        subprocess.run(['systemctl', '--user', 'enable', *services], check=True)
+        subprocess.run(['systemctl', '--user', 'restart', *services], check=True)
+    else:
+        print('Start: systemctl --user daemon-reload')
+        print('      systemctl --user enable --now ' + ' '.join(services))
+
+
+def relay(args):
+    if not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?', args.domain) or '.' not in args.domain:
+        raise ValueError('Enter a domain name without a scheme or path.')
+    output = Path(args.output).expanduser().resolve()
+    if output.exists():
+        raise ValueError('The output file already exists. Choose a new path or inspect it first.')
+    config = args.domain + ' {\n    encode zstd gzip\n    reverse_proxy 127.0.0.1:' + str(args.relay_port) + ' {\n        flush_interval -1\n    }\n}\n'
+    write_private(output, config)
+    print('Caddy configuration generated: ', output)
+    print('Point DNS to the relay, include this file in its Caddy configuration, then validate and reload Caddy.')
+    print('Expose only HTTPS/certificate-validation ports and necessary SSH, not the reverse-tunnel port.')
+
+
+def rotate(args):
+    args.state.mkdir(parents=True, exist_ok=True, mode=0o700)
+    write_private(args.state/'access-token', secrets.token_urlsafe(32)+'\n')
+    dbfile = args.state/'gateway.sqlite3'
+    if dbfile.exists():
+        db = sqlite3.connect(dbfile)
+        try:
+            tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            with db:
+                for name in ('devices', 'push_subscriptions'):
+                    if name in tables: db.execute('DELETE FROM '+name)
+        finally:
+            db.close()
+    print('New access token saved in: ', args.state/'access-token')
+    print('Old device sessions were revoked. Restart the gateway to load the new token.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest='action', required=True)
+    for name in ('doctor', 'install', 'rotate-token', 'backup', 'restore', 'cleanup'):
+        p = sub.add_parser(name)
+        p.add_argument('--state', type=Path, default=Path.home()/'.local/state/codex-remote')
+        if name in ('doctor', 'install'): p.add_argument('--codex', default='codex')
+        if name == 'backup': p.add_argument('--output', type=Path, required=True)
+        if name == 'restore': p.add_argument('--backup', type=Path, required=True)
+        if name == 'cleanup':
+            p.add_argument('--apply', action='store_true', help='Delete unused uploads older than seven days and compact the gateway database')
+        if name == 'install':
+            p.add_argument('--workspace', action='append')
+            p.add_argument('--origin', required=True)
+            p.add_argument('--host', default='127.0.0.1')
+            p.add_argument('--port', type=int, default=8765)
+            p.add_argument('--relay')
+            p.add_argument('--relay-port', type=int, default=18765)
+            p.add_argument('--socket')
+            p.add_argument('--transport', choices=['isolated', 'shared'], default='isolated')
+            p.add_argument('--browse-existing', action='store_true')
+            p.add_argument('--env-file')
+            p.add_argument('--push-subject')
+            p.add_argument('--sandbox', choices=['read-only', 'workspace-write', 'danger-full-access'], default='workspace-write')
+            p.add_argument('--approval', choices=['on-request', 'untrusted', 'never'], default='on-request')
+            p.add_argument('--start', action='store_true')
+    p = sub.add_parser('relay-config')
+    p.add_argument('--domain', required=True)
+    p.add_argument('--relay-port', type=int, default=18765)
+    p.add_argument('--output', default='Caddyfile.generated')
+    args = parser.parse_args()
+    try:
+        if hasattr(args, 'state'):
+            args.state = args.state.expanduser().resolve()
+        for name in ('port', 'relay_port'):
+            if hasattr(args, name) and not 1 <= getattr(args, name) <= 65535:
+                raise ValueError('Ports must be between 1 and 65535.')
+        if args.action == 'doctor': return doctor(args)
+        if args.action == 'install': install(args)
+        if args.action == 'relay-config': relay(args)
+        if args.action == 'rotate-token': rotate(args)
+        if args.action == 'backup': print(json.dumps(backup_state(args.state, args.output.expanduser())))
+        if args.action == 'restore': print(json.dumps(restore_state(args.backup.expanduser(), args.state)))
+        if args.action == 'cleanup':
+            from codex_remote.server import Store
+            with offline(args.state):
+                if not (args.state/'gateway.sqlite3').is_file():
+                    raise ValueError('Gateway database does not exist.')
+                store = Store(args.state/'gateway.sqlite3')
+                try:
+                    result = clean_uploads(store, args.state/'uploads', apply=args.apply)
+                    if args.apply:
+                        store.prune_events()
+                        store.db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+                        store.db.execute('VACUUM')
+                    print(json.dumps(result))
+                finally:
+                    store.close()
+        return 0
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        print(str(error), file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

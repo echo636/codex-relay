@@ -1,0 +1,6 @@
+# Runtime installation, with the tested transitive dependency set.
+-c requirements-lock.txt
+jsonschema>=4.23,<5
+pywebpush>=2.0,<3
+websockets>=15,<17
+cryptography>=43,<51

@@ -1,0 +1,22 @@
+name: Bug report
+description: Report a reproducible problem using synthetic examples.
+body:
+  - type: markdown
+    attributes:
+      value: Do not include API keys, access tokens, private paths, project names, transcripts or raw logs. Use the redacted doctor output and synthetic examples.
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: What happened and how can it be reproduced?
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Gateway/Codex versions, transport mode, browser and redacted doctor output
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior

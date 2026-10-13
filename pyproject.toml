@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools==80.9.0", "wheel==0.45.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex-remote-console"
+dynamic = ["version"]
+description = "A self-hosted mobile web console for server-side Codex sessions"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "codex_remote/static/vendor/*/LICENSE", "codex_remote/static/vendor/mermaid/THIRD_PARTY_NOTICES.txt"]
+authors = [{name = "Codex Remote contributors"}]
+dependencies = ["jsonschema>=4.23,<5", "pywebpush>=2.0,<3", "websockets>=15,<17", "cryptography>=43,<51"]
+classifiers = ["Development Status :: 3 - Alpha", "Operating System :: POSIX :: Linux", "Programming Language :: Python :: 3", "Topic :: Software Development"]
+
+[project.scripts]
+codex-remote = "codex_remote.server:main"
+codex-remote-manage = "codex_remote.manage:main"
+
+[tool.setuptools]
+packages = ["codex_remote"]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "codex_remote.__version__"}
+
+[tool.setuptools.package-data]
+codex_remote = ["static/*", "static/locales/*", "static/vendor/*/*", "static/vendor/katex/fonts/*"]

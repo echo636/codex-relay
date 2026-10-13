@@ -1,0 +1,21 @@
+# Install as ~/.config/systemd/user/codex-remote.service on the agent server.
+# Prefer `codex-remote-manage install` to generate actual paths.
+[Unit]
+Description=Codex Remote gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/ABSOLUTE/PATH/TO/codex-remote
+ExecStart=/ABSOLUTE/PATH/TO/codex-remote/.venv/bin/python -m codex_remote --workspace /ABSOLUTE/PROJECT --codex /ABSOLUTE/PATH/TO/codex --state /ABSOLUTE/LOCAL/STATE/codex-remote --transport isolated --origin https://codex.example.com
+# Optional: for a custom model provider that reads an environment key.
+# EnvironmentFile=%h/.config/codex-remote/provider.env
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Restart=on-failure
+RestartSec=5
+UMask=0077
+TimeoutStopSec=25
+
+[Install]
+WantedBy=default.target

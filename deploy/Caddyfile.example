@@ -1,0 +1,8 @@
+# On the relay host. Point this hostname's DNS A/AAAA to that host.
+# Open TCP 80/443 to Caddy and SSH only as needed. Keep port 18765 on loopback.
+codex.example.com {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:18765 {
+        flush_interval -1
+    }
+}

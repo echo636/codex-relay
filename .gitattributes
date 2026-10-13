@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.png binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+# Keep upstream bundles byte-for-byte; their internal whitespace is intentional.
+codex_remote/static/vendor/** -whitespace
