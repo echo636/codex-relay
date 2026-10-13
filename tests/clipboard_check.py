@@ -43,6 +43,16 @@ def until(page, expression):
     raise AssertionError('Timed out: ' + expression)
 
 
+def held_upload(page, pending):
+    # UI reservations appear before the network route arrives. Pump Playwright
+    # callbacks until the request is actually held, including on fast CI runners.
+    for _ in range(200):
+        if pending:
+            return pending.pop()
+        page.wait_for_timeout(50)
+    raise AssertionError('Timed out waiting for the held upload request')
+
+
 def main():
     h = RemoteTests(); h.setUp()
     try:
@@ -113,8 +123,7 @@ def main():
             expect(page.locator('#prompt')).to_be_enabled()
             expect(page.locator('#upload-status')).to_be_hidden()
             expect(page.locator('#attachments .attachment-chip')).to_have_count(0)
-            assert delayed
-            delayed.pop().continue_()
+            held_upload(page, delayed).continue_()
             until(page, 'remoteUI.uploadCount() === 0')
             page.locator('[data-thread-id="'+tids[0]+'"]').click()
             expect(page.locator('#attachments')).to_contain_text('slow.txt')
@@ -128,7 +137,7 @@ def main():
             expect(page.locator('#notice')).to_contain_text('最多 8 个附件')
             page.locator('#file-input').set_input_files({'name':'eighth.txt','mimeType':'text/plain','buffer':b'last'})
             expect(page.locator('#upload-status')).to_contain_text('8 个附件')
-            delayed.pop().continue_()
+            held_upload(page, delayed).continue_()
             expect(page.locator('#attachments .attachment-chip')).to_have_count(8)
             expect(page.locator('#upload-status')).to_be_hidden()
             for _ in range(8): page.locator('#attachments button').first.click()
@@ -150,9 +159,10 @@ def main():
             page.route('**/api/uploads', hold)
             paste(page, [{'name':'slow.txt'}])
             expect(page.locator('#upload-status')).to_be_visible()
+            pending_logout_upload = held_upload(page, delayed)
             page.locator('#logout').click()
             expect(page.locator('#login')).to_be_visible()
-            delayed.pop().fulfill(status=201, content_type='application/json', body=json.dumps({'id':'a'*32,'name':'slow.txt','mime':'text/plain','size':1}))
+            pending_logout_upload.fulfill(status=201, content_type='application/json', body=json.dumps({'id':'a'*32,'name':'slow.txt','mime':'text/plain','size':1}))
             page.wait_for_timeout(200)
             assert page.evaluate('state.attachments.length') == 0
             assert not errors, errors
