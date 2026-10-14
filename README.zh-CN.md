@@ -1,4 +1,7 @@
-# Codex Remote
+# Codex Relay
+
+项目原名 Codex Remote。旧命令 `codex-remote`、`codex-remote-manage` 继续作为兼容入口，
+已有的数据目录和 systemd 服务沿用原有标识。
 
 [English](README.md) · [部署](docs/deployment.md) · [运维与备份](docs/operations.md)
 
@@ -28,7 +31,7 @@ Enter 发送；Ctrl / ⌘ + Enter 或 Shift + Enter 换行，兼容输入法选�
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python -m pip install --no-deps .
-.venv/bin/codex-remote --workspace "$HOME/projects/example" \
+.venv/bin/codex-relay --workspace "$HOME/projects/example" \
   --state "$HOME/.local/state/codex-remote"
 ```
 

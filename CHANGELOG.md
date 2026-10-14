@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Rename the project to Codex Relay and the repository to `echo636/codex-relay`.
+- Update the web/PWA branding and English/Chinese documentation; add `codex-relay`
+  and `codex-relay-manage` command aliases. Existing commands, Python distribution
+  and module names, state directories, browser settings and service IDs remain compatible.
+
 ## 0.3.0a1
 
 Initial public alpha for a self-hosted, single-user remote Codex workspace.

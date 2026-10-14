@@ -9,7 +9,7 @@ the gateway SQLite database should be on a local filesystem with sufficient quot
 For a private VPN hostname:
 
 ```bash
-codex-remote --workspace "$HOME/projects/example" \
+codex-relay --workspace "$HOME/projects/example" \
   --host 0.0.0.0 --port 8765 --origin http://agent.example.com:8765 \
   --state "$HOME/.local/state/codex-remote"
 ```
@@ -38,7 +38,7 @@ against the relay. Use a trusted host. The native Codex socket stays on the agen
 5. Generate the gateway and tunnel units:
 
 ```bash
-codex-remote-manage install --workspace "$HOME/projects/example" \
+codex-relay-manage install --workspace "$HOME/projects/example" \
   --state "$HOME/.local/state/codex-remote" \
   --origin https://codex.example.com --relay codex-relay
 ```

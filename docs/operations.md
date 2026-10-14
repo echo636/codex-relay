@@ -1,5 +1,11 @@
 # Operations
 
+Codex Relay was previously named Codex Remote. The Python distribution
+`codex-remote-console`, module `codex_remote`, default state directory, browser
+storage keys and `codex-remote.service` / `codex-remote-tunnel.service` identifiers
+are retained for upgrades. Both old and new command names work. The installer
+recognizes service files generated under either project name.
+
 ## Storage layout
 
 `--state` contains `gateway.sqlite3` (WAL), an access token, uploaded files and, when
@@ -8,7 +14,7 @@ Native Codex owns its own conversation files and authentication. The gateway nev
 migrates them. Use a local filesystem for SQLite; home quotas are separate from
 whole-disk free space.
 
-`codex-remote-manage doctor --state /absolute/local/state` prints versions,
+`codex-relay-manage doctor --state /absolute/local/state` prints versions,
 dependency checks and storage health without user names, host names, paths,
 credentials, thread IDs, environment variables or logs. It does not attach to a daemon.
 Filesystem free space does not prove that your account quota is sufficient; doctor
@@ -26,8 +32,8 @@ attachment reuploaded after cleanup.
 For an offline preview and optional database compaction:
 
 ```bash
-codex-remote-manage cleanup --state /absolute/local/state
-codex-remote-manage cleanup --state /absolute/local/state --apply
+codex-relay-manage cleanup --state /absolute/local/state
+codex-relay-manage cleanup --state /absolute/local/state --apply
 ```
 
 Stop only the gateway first. Offline commands refuse the state lock of a running
@@ -41,8 +47,8 @@ Never remove a used upload just to reset the quota: native history may reference
 After stopping the gateway:
 
 ```bash
-codex-remote-manage backup --state /absolute/local/state --output /absolute/private/backup
-codex-remote-manage restore --backup /absolute/private/backup --state /absolute/new/state
+codex-relay-manage backup --state /absolute/local/state --output /absolute/private/backup
+codex-relay-manage restore --backup /absolute/private/backup --state /absolute/new/state
 ```
 
 Backup destinations must be new directories outside the state directory. Restore

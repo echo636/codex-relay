@@ -245,7 +245,7 @@ class Gateway:
                 # This UI drives the user's actual Codex CLI app-server. Native
                 # originator is process-wide and fixed by its first client;
                 # preserve the CLI identity used by CLI-only API providers.
-                "clientInfo": {"name": "codex_cli_rs", "title": "Codex Remote (Codex CLI)", "version": __version__},
+                "clientInfo": {"name": "codex_cli_rs", "title": "Codex Relay (Codex CLI)", "version": __version__},
                 "capabilities": {"experimentalApi": True},
             })
             self.rpc.notify("initialized")
@@ -748,7 +748,7 @@ def main():
         threading.Thread(target=web.shutdown, daemon=True).start()
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    print(f"Codex Remote: {origin}", flush=True)
+    print(f"Codex Relay: {origin}", flush=True)
     print(f"Access token saved in {token_file} (this is the gateway token, not a model API key).", flush=True)
     try:
         web.serve_forever(poll_interval=0.3)

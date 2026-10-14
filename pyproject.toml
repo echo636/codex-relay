@@ -10,13 +10,19 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "codex_remote/static/vendor/*/LICENSE", "codex_remote/static/vendor/mermaid/THIRD_PARTY_NOTICES.txt"]
-authors = [{name = "Codex Remote contributors"}]
+authors = [{name = "Codex Relay contributors"}]
 dependencies = ["jsonschema>=4.23,<5", "pywebpush>=2.0,<3", "websockets>=15,<17", "cryptography>=43,<51"]
 classifiers = ["Development Status :: 3 - Alpha", "Operating System :: POSIX :: Linux", "Programming Language :: Python :: 3", "Topic :: Software Development"]
 
 [project.scripts]
+codex-relay = "codex_remote.server:main"
+codex-relay-manage = "codex_remote.manage:main"
 codex-remote = "codex_remote.server:main"
 codex-remote-manage = "codex_remote.manage:main"
+
+[project.urls]
+Repository = "https://github.com/echo636/codex-relay"
+Issues = "https://github.com/echo636/codex-relay/issues"
 
 [tool.setuptools]
 packages = ["codex_remote"]

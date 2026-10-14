@@ -314,7 +314,7 @@
     if (ios && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches) return I18n.t("Open the app from the iPhone home screen to enable notifications. Use the browser Share menu to add it first.");
     if (!('Notification' in window) || !('PushManager' in window) || !('serviceWorker' in navigator)) return I18n.t("Background push is not supported here. iPhone requires iOS 16.4 or later and the installed home-screen app.");
     if (!boot.pushPublicKey) return I18n.t("Push is not configured on the server. Configure an HTTPS origin first.");
-    if (Notification.permission === 'denied') return I18n.t("Notifications are blocked. Allow them in iPhone Settings → Notifications → Codex Remote, or your browser site settings, then reopen the app.");
+    if (Notification.permission === 'denied') return I18n.t("Notifications are blocked. Allow them in iPhone Settings → Notifications → Codex Relay, or your browser site settings, then reopen the app.");
     return '';
   }
   function pushButtons(enable, test, disable) {

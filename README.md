@@ -1,6 +1,9 @@
-# Codex Remote
+# Codex Relay
 
 [简体中文](README.zh-CN.md) · [Deployment](docs/deployment.md) · [Operations](docs/operations.md) · [Security](SECURITY.md)
+
+Previously named Codex Remote. The `codex-remote` and `codex-remote-manage` commands
+remain compatible aliases; existing state directories and systemd services are reused.
 
 A self-hosted mobile web console for Codex running on your own server. Continue a
 conversation from your phone, send follow-up instructions, respond to approvals,
@@ -32,7 +35,7 @@ From a checkout of this repository:
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python -m pip install --no-deps .
-.venv/bin/codex-remote --workspace "$HOME/projects/example" \
+.venv/bin/codex-relay --workspace "$HOME/projects/example" \
   --state "$HOME/.local/state/codex-remote"
 ```
 
@@ -65,7 +68,7 @@ Passive discovery never changes permissions. Workspace allowlists are not an OS 
 ## Install as a service
 
 ```bash
-.venv/bin/codex-remote-manage install \
+.venv/bin/codex-relay-manage install \
   --workspace "$HOME/projects/example" \
   --state "$HOME/.local/state/codex-remote" \
   --origin https://codex.example.com

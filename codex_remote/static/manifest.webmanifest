@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Codex Remote",
-  "short_name": "Codex Remote",
+  "name": "Codex Relay",
+  "short_name": "Codex Relay",
   "description": "Continue server-side Codex conversations from your phone or browser.",
   "lang": "en",
   "start_url": "/",
