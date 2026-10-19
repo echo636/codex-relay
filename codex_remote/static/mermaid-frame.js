@@ -2,6 +2,7 @@
 // Runs in an opaque-origin sandbox. It has no access to the conversation DOM,
 // cookies, storage or API, and its CSP prohibits outgoing network requests.
 (() => {
+  if (typeof mermaid === 'undefined') { parent.postMessage({type: 'mermaid-load-error'}, '*'); return; }
   const stage = document.getElementById('stage');
   let sequence = Promise.resolve();
   window.addEventListener('message', event => {

@@ -7,6 +7,9 @@
 - The implementation was developed against Codex 0.160.0 and 0.162.1 protocol shapes.
   Native empty-thread and client-identity fixtures were verified with 0.162.1 for this alpha, using a local model and temporary state. These are compatibility references, not a promise that every feature works on
   every build or future version. See the release notes for checks actually executed.
+- Async question cards support the `agentMessage.questions` shape in the Codex 0.163.0
+  schema. Choice/free-text replies use the native question-reply text envelope,
+  with active-turn steering and idle-turn continuation covered by local fixtures.
 - Goals, queues, thread settings and shared daemon access use evolving native APIs.
   Unsupported calls surface errors; there is no silent emulation of unsupported goals.
 - Shared mode requires an existing native daemon exposing the expected Unix socket

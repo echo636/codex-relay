@@ -2,13 +2,14 @@
 (() => {
   let lastSyncError = '';
   let boot = {}, models = [], historyCursor = null, filePath = '', fileDirectory = '';
-  const drafts = new Map();
+  const drafts = new Map(), questionDrafts = new Map();
   let restoredThread = null;
   try {
     const saved = JSON.parse(sessionStorage.getItem('codex-remote-language-drafts') || 'null');
     sessionStorage.removeItem('codex-remote-language-drafts');
     if (saved && Date.now() - saved.time < 300000) {
       for (const [id, draft] of saved.drafts) drafts.set(id, draft);
+      for (const [id, draft] of saved.questionDrafts || []) questionDrafts.set(id, draft);
       restoredThread = saved.current;
       if (saved.submission) pendingSubmission = saved.submission;
     }
@@ -154,18 +155,134 @@
     details.addEventListener('toggle', () => { if (details.open && !loaded) load(); });
     if (details.open) load();
   }
+  const questionEntries = new Map(), answerHistory = new Map();
+  function questionReplies(text) {
+    if (typeof text !== 'string') return null;
+    const match = /^\s*<send_user_message_question_reply>\s*([\s\S]*?)\s*<\/send_user_message_question_reply>\s*$/.exec(text);
+    if (!match) return null;
+    try {
+      const replies = JSON.parse(match[1]);
+      if (!Array.isArray(replies) || !replies.length) return null;
+      for (const reply of replies) {
+        if (!reply || typeof reply.answer !== 'string' || typeof reply.question !== 'string' || typeof reply.questionItemId !== 'string') return null;
+        const id = JSON.parse(reply.questionItemId);
+        if (!Array.isArray(id) || id.length !== 3 || id[0] !== 'request_user_input_async' || typeof id[1] !== 'string' || !Number.isSafeInteger(id[2]) || id[2] < 0) return null;
+        reply.questionItemId = JSON.stringify(id);
+      }
+      return replies;
+    } catch (_) { return null; }
+  }
+  function rememberAnswers(tid, replies) {
+    if (!answerHistory.has(tid)) answerHistory.set(tid, new Map());
+    for (const reply of replies) answerHistory.get(tid).set(reply.questionItemId, reply);
+    questionButtons();
+  }
+  function observeAnswers(item) {
+    if (item.type !== 'userMessage') return;
+    for (const content of item.content || []) {
+      const replies = content.type === 'text' && questionReplies(content.text);
+      if (replies) rememberAnswers(state.current, replies);
+    }
+  }
+  function updateQuestion(entry) {
+    const saved = answerHistory.get(entry.tid);
+    let remaining = 0, hasAnswer = false;
+    for (const field of entry.fields) {
+      const reply = saved?.get(field.key), answered = reply && reply.question === field.question.title;
+      field.answered = !!answered;
+      field.controls.hidden = !!answered; field.summary.hidden = !answered;
+      field.fieldset.disabled = !!answered || entry.sending;
+      if (answered) field.summary.textContent = I18n.t('Answered: ') + reply.answer;
+      else { remaining++; if (field.value().trim()) hasAnswer = true; }
+    }
+    entry.form.dataset.status = remaining ? (entry.sending ? 'sending' : 'pending') : 'answered';
+    entry.submit.hidden = !remaining;
+    entry.submit.disabled = entry.sending || !hasAnswer || state.current !== entry.tid || !state.online || !state.ready || state.sending;
+    entry.submit.textContent = entry.sending ? I18n.t('Sending…') : I18n.t('Send answer');
+    entry.status.textContent = remaining ? I18n.t('You can answer while Codex keeps working.') : I18n.t('✓ Answers sent');
+  }
+  function questionButtons() {
+    for (const entry of questionEntries.values()) if (entry.form.isConnected && entry.tid === state.current) updateQuestion(entry);
+  }
+  function questions(parent, item) {
+    if (!Array.isArray(item.questions) || !item.questions.length || item.questions.some(q => !q || typeof q.title !== 'string')) return;
+    const tid = state.current, key = JSON.stringify([tid, item.id]), signature = JSON.stringify(item.questions);
+    let entry = questionEntries.get(key);
+    if (!entry || entry.signature !== signature) {
+      const form = el('form', 'async-questions request'); form.dataset.questionItem = item.id;
+      form.append(el('h3', '', I18n.t('Codex has a question')));
+      entry = {tid, form, signature, fields: [], sending: false, submission: null};
+      item.questions.forEach((question, index) => {
+        const fieldset = el('fieldset', 'async-question'), controls = el('div', 'question-controls');
+        fieldset.append(el('legend', '', question.title));
+        const options = Array.isArray(question.options) ? question.options.filter(o => typeof o === 'string') : [];
+        const input = el('textarea'); input.rows = 2; input.maxLength = 10000;
+        const label = el('label', 'question-freeform', options.length ? I18n.t('Or write your own answer') : I18n.t('Your answer'));
+        label.append(input);
+        const radios = [], choices = el('div', 'question-options');
+        for (const [n, option] of options.entries()) {
+          const choice = el('label', 'question-option'), radio = el('input'); radio.type = 'radio'; radio.name = 'question-' + index; radio.value = option; radio.checked = n === 0;
+          choice.append(radio, el('span', '', option)); choices.append(choice); radios.push(radio);
+          radio.onchange = () => { input.value = ''; updateQuestion(entry); };
+        }
+        input.oninput = () => { if (input.value) radios.forEach(radio => { radio.checked = false; }); updateQuestion(entry); };
+        controls.append(choices, label);
+        const summary = el('p', 'question-answer'); summary.hidden = true;
+        fieldset.append(controls, summary); form.append(fieldset);
+        entry.fields.push({question, fieldset, controls, summary, key: JSON.stringify(['request_user_input_async', item.id, index]),
+          value: () => input.value.trim() || radios.find(radio => radio.checked)?.value || '',
+          restore: value => { radios.forEach(radio => { radio.checked = radio.value === value; }); input.value = radios.some(radio => radio.checked) ? '' : value; }});
+      });
+      const draft = questionDrafts.get(key);
+      if (draft && draft.signature === signature) { entry.fields.forEach((field, index) => field.restore(draft.values[index] || '')); entry.submission = draft.submission; }
+      questionDrafts.delete(key);
+      entry.status = el('p', 'fine'); entry.status.setAttribute('role', 'status');
+      entry.error = el('p', 'error'); entry.error.setAttribute('role', 'alert');
+      entry.submit = el('button', 'approve'); entry.submit.type = 'submit';
+      form.append(entry.status, entry.error, entry.submit);
+      form.onsubmit = async event => {
+        event.preventDefault(); updateQuestion(entry); if (entry.submit.disabled || entry.submit.hidden) return;
+        const replies = entry.fields.filter(field => !field.answered && field.value().trim()).map(field => ({answer: field.value(), question: field.question.title, questionItemId: field.key}));
+        const text = '<send_user_message_question_reply>\n' + JSON.stringify(replies) + '\n</send_user_message_question_reply>';
+        if (text.length > 50000) { entry.error.textContent = I18n.t('Your answers are too long. Shorten them and try again.'); return; }
+        if (!entry.submission || entry.submission.text !== text) {
+          entry.submission = {text, mode: 'auto', submissionId: Array.from(crypto.getRandomValues(new Uint8Array(20)), v => v.toString(16).padStart(2, '0')).join('')};
+        }
+        const epoch = uploadEpoch;
+        entry.sending = true; entry.error.textContent = ''; updateQuestion(entry);
+        try {
+          if (state.readOnly) await connectThread(tid);
+          if (epoch !== uploadEpoch) return;
+          await api('/api/threads/' + encodeURIComponent(tid) + '/message', entry.submission);
+          if (epoch !== uploadEpoch) return;
+          rememberAnswers(tid, replies); entry.submission = null;
+          refresh().catch(() => {});
+        } catch (error) { if (epoch === uploadEpoch) entry.error.textContent = error.message; }
+        finally { if (epoch === uploadEpoch) { entry.sending = false; updateQuestion(entry); } }
+      };
+      questionEntries.set(key, entry);
+    }
+    parent.append(entry.form); updateQuestion(entry);
+  }
   window.remoteUI = {
+    questions, observeAnswers, questionButtons,
     markdown, specialRequest, imageView, toolContent, restoredThread,
     saveLanguageDrafts() {
-      if (state.sending || [...uploads.values()].some(job => job.count)) throw new Error(I18n.t('Please wait for sending and uploads to finish before changing language.'));
+      if (state.sending || [...uploads.values()].some(job => job.count) || [...questionEntries.values()].some(entry => entry.sending)) throw new Error(I18n.t('Please wait for sending and uploads to finish before changing language.'));
       if (state.current) drafts.set(state.current, {text: $('prompt').value, attachments: state.attachments});
-      sessionStorage.setItem('codex-remote-language-drafts', JSON.stringify({time: Date.now(), drafts: [...drafts], current: state.current, submission: pendingSubmission}));
+      for (const [key, entry] of questionEntries) questionDrafts.set(key, {signature: entry.signature, values: entry.fields.map(field => field.value()), submission: entry.submission});
+      sessionStorage.setItem('codex-remote-language-drafts', JSON.stringify({time: Date.now(), drafts: [...drafts], questionDrafts: [...questionDrafts], current: state.current, submission: pendingSubmission}));
     },
-    clearPrivate() { try { sessionStorage.removeItem('codex-remote-language-drafts'); } catch (_) {} uploadEpoch++; uploads.clear(); window.messageRenderer.clear(); drafts.clear(); state.attachments = []; $('attachments').replaceChildren(); $('upload-status').hidden = true; $('file-preview').textContent = ''; $('devices').replaceChildren(); $('notifications').replaceChildren(); },
+    clearPrivate() { try { sessionStorage.removeItem('codex-remote-language-drafts'); } catch (_) {} uploadEpoch++; uploads.clear(); questionEntries.clear(); questionDrafts.clear(); answerHistory.clear(); window.messageRenderer.clear(); drafts.clear(); state.attachments = []; $('attachments').replaceChildren(); $('upload-status').hidden = true; $('file-preview').textContent = ''; $('devices').replaceChildren(); $('notifications').replaceChildren(); },
     uploadCount() { return (uploads.get(state.current) || {}).count || 0; },
     userContent(node, contents) {
       node.replaceChildren();
       for (const item of contents) {
+        const replies = item.type === 'text' && questionReplies(item.text);
+        if (replies) {
+          for (const reply of replies) { const summary = el('div', 'question-reply'); summary.append(el('div', 'question-reply-title', reply.question), el('div', '', reply.answer)); node.append(summary); }
+          continue;
+        }
         let attachment = null;
         if (item.type === 'text' && item.text.startsWith("User attachment (server file): ")) {
           try { attachment = JSON.parse(item.text.slice("User attachment (server file): ".length)); } catch (_) {}

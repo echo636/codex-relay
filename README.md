@@ -17,7 +17,8 @@ The web login takes a gateway access token, never your model API key.
 
 - Responsive Web/PWA interface, light/dark themes and live execution/completion status.
 - Shared conversation history across browsers, reconnect and history pagination.
-- Follow up during a turn, queue the next turn, stop, approve actions and answer questions.
+- Follow up during a turn, queue the next turn, stop and approve actions.
+- Answer Codex questions with suggested choices or free text, including async questions while work continues; answers sync across devices.
 - Workspace selection, conversation search, rename, archive, fork and JSON export.
 - Clipboard images/files, drag-and-drop, file previews and tool image views.
 - Markdown, highlighted code/diffs, KaTeX mathematics and sandboxed Mermaid diagrams.

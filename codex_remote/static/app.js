@@ -46,6 +46,7 @@ function buttons() {
   $('send').setAttribute('aria-label', sendLabel); $('send').title = sendLabel;
   if (window.runActivity) window.runActivity.render();
   if (window.slashCommands) window.slashCommands.render();
+  if (window.remoteUI) window.remoteUI.questionButtons();
 }
 function renderThreads() {
   $('threads').replaceChildren();
@@ -123,12 +124,14 @@ function upsert(item, completed) {
   }
   if (record.done && !completed) return;
   record.item = Object.assign({}, record.item, item); record.done = !!completed;
+  if (window.remoteUI) window.remoteUI.observeAnswers(record.item);
   pendingRenders.add(record);
   if (!renderFrame) renderFrame = requestAnimationFrame(flushRenders);
 }
 function renderItem(record) {
   const i = record.item, node = record.node;
   const wasOpen = node.firstChild && node.firstChild.open;
+  const focused = node.querySelector('.async-questions')?.contains(document.activeElement) ? document.activeElement : null;
   node.replaceChildren();
   if (i.type === 'agentMessage' || i.type === 'userMessage') {
     node.className = 'message ' + (i.type === 'userMessage' ? 'user' : 'agent');
@@ -138,6 +141,8 @@ function renderItem(record) {
     if (i.type === 'userMessage' && window.remoteUI) window.remoteUI.userContent(contentNode, i.content || []);
     if (i.type === 'agentMessage' && window.remoteUI) window.remoteUI.markdown(contentNode, content, record.done);
     node.append(contentNode);
+    if (i.type === 'agentMessage' && window.remoteUI) window.remoteUI.questions(node, i);
+    if (focused && node.contains(focused)) focused.focus({preventScroll: true});
   } else {
     node.className = 'message tool'; node.dataset.type = i.type; node.dataset.itemId = i.id;
     const details = el('details'); details.open = !!wasOpen;
