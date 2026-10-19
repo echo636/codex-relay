@@ -21,7 +21,7 @@
   const closeDialogs = () => document.querySelectorAll('dialog[open]').forEach(d => d.close());
   const safeUrl = value => { try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) ? url.href : null; } catch (_) { return null; } };
   async function action(work, errorId) { try { await work(); } catch (error) { if (errorId) $(errorId).textContent = error.message; else notice(error.message); } }
-  function markdown(parent, text, complete = true) { window.messageRenderer.markdown(parent, text, complete); }
+  function markdown(parent, text, complete = true, context = {}) { window.messageRenderer.markdown(parent, text, complete, context); }
   function toolContent(details, item, text) {
     const content = el('div', 'content tool-content');
     const block = (source, language, label) => {

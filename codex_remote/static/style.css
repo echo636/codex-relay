@@ -143,3 +143,6 @@ dialog{border-radius:20px;background:var(--surface);box-shadow:0 18px 80px #0000
 .async-questions .error:empty{display:none}
 .mermaid-tools .diagram-retry{border:1px solid var(--line);border-radius:7px;padding:6px 10px;color:var(--green);background:var(--surface)}
 @media(max-width:760px){.question-freeform textarea{font-size:16px}.question-option{min-height:44px}}
+
+.md-file-link::after{content:" ↓";font-size:.85em;white-space:nowrap}
+.md-file-link[aria-busy=true]{opacity:.6;cursor:progress}

@@ -18,6 +18,11 @@ security review or protection against all denial-of-service attacks.
 Model text is untrusted. Raw Markdown HTML is disabled, math rendering disables trust,
 and Mermaid executes in an opaque sandbox with no API/network access; the main page
 receives an image. Browser dependencies are local and versioned.
+File downloads require authentication. The project browser stays within its workspace.
+An assistant message can also offer a specific file outside that directory: the download
+endpoint checks the destination against that message’s indexed Markdown links. Merely
+rendering a message never reads or downloads those files. Files are sent as attachments;
+HTML and SVG downloads do not execute inside the web console.
 
 API responses and transcripts are not cached by the service worker. Language and
 UI preferences use local storage. During an explicit language change, unsent drafts

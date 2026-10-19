@@ -23,6 +23,10 @@
   provider. This project neither bypasses them nor bundles authentication material.
 - PWA notifications require HTTPS and compatible browser/OS support. Mobile viewport
   tests do not certify iPhone background push. Validate your actual phone and relay.
+- Assistant file links support relative/absolute paths, `file:` and `sandbox:` destinations,
+  reference links and code line suffixes. Downloads stream regular files and support HTTP
+  byte ranges; they do not have the upload size limit. Directory links require an archive
+  created by the agent first. Missing or temporary files must be generated again.
 - Uploaded files: 10 MiB per file, 8 per message, 1 GiB total. Used files are retained;
   only never-submitted files older than seven days are eligible for automatic cleanup.
 - Replay events are capped at approximately 100,000 entries, pruned every 1,000 inserts.

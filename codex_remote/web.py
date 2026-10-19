@@ -12,6 +12,7 @@ from codex_remote.server import Handler, WebServer, APIError
 from codex_remote.storage import clean_uploads
 from codex_remote.i18n import locale
 from codex_remote.commands import slash_input
+from codex_remote.artifacts import open_download, download_range
 
 
 class RemoteWebServer(WebServer):
@@ -67,11 +68,33 @@ class RemoteHandler(Handler):
         except ValueError:
             raise APIError(400, "Invalid attachment request.")
 
-    def file_response(self, path, name, mime="application/octet-stream", inline=False):
-        data = Path(path).read_bytes()
-        disposition = ("inline" if inline else "attachment") + "; filename*=UTF-8''" + quote(name, safe="")
-        self.headers_out(200, mime, len(data), {"Content-Disposition": disposition})
-        self.wfile.write(data)
+    def file_response(self, path, name, mime="application/octet-stream", inline=False, info=False, root=None):
+        file, size = open_download(path, root)
+        with file:
+            if info:
+                return self.json(200, {"name": name, "size": size})
+            fallback = re.sub(r'[^A-Za-z0-9._ -]', '_', name) or 'download'
+            disposition = ('inline' if inline else 'attachment') + '; filename="' + fallback + '"; filename*=UTF-8\'\'' + quote(name, safe='')
+            headers = {"Content-Disposition": disposition, "Accept-Ranges": "bytes"}
+            try:
+                start, end, partial = download_range(self.headers.get('Range'), size)
+            except ValueError:
+                return self.headers_out(416, length=0, extra={"Content-Range": f"bytes */{size}"})
+            if partial:
+                headers['Content-Range'] = f'bytes {start}-{end-1}/{size}'
+            self.headers_out(206 if partial else 200, mime, end - start, headers)
+            file.seek(start)
+            remaining = end - start
+            try:
+                while remaining:
+                    chunk = file.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        self.close_connection = True
+                        break
+                    self.wfile.write(chunk); remaining -= len(chunk)
+            except (OSError, TimeoutError):
+                # Headers are already sent; never append a JSON error to a file.
+                self.close_connection = True
 
     def api(self, path, post, body):
         g = self.server.gateway
@@ -118,8 +141,10 @@ class RemoteHandler(Handler):
             if entry["directory"]:
                 return self.json(200, entry)
             if query.get("download") == ["1"]:
-                return self.file_response(entry["path"], entry["name"])
-            raw = Path(entry["path"]).read_bytes()
+                return self.file_response(entry["path"], entry["name"], root=g.thread(query.get("threadId", [""])[0])["cwd"])
+            file, _ = open_download(entry['path'], g.thread(query.get('threadId', [''])[0])['cwd'])
+            with file:
+                raw = file.read(1024 * 1024 + 1)
             try:
                 content = raw[:1024 * 1024].decode("utf-8")
                 binary = "\x00" in content
@@ -158,6 +183,9 @@ class RemoteHandler(Handler):
         if match:
             tid, action = match.groups()
             g.thread(tid)
+            if action == "artifact" and not post:
+                target = g.linked_file(tid, query.get('itemId', [''])[0], query.get('path', [''])[0])
+                return self.file_response(target, Path(target).name, info=query.get('info') == ['1'])
             if action == "goal" and not post:
                 return self.json(200, g.get_goal(tid))
             if action == "permissions" and not post:

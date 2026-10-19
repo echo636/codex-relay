@@ -21,6 +21,7 @@ The web login takes a gateway access token, never your model API key.
 - Answer Codex questions with suggested choices or free text, including async questions while work continues; answers sync across devices.
 - Workspace selection, conversation search, rename, archive, fork and JSON export.
 - Clipboard images/files, drag-and-drop, file previews and tool image views.
+- Click assistant file links to download, including large files and files generated outside the project.
 - Markdown, highlighted code/diffs, KaTeX mathematics and sandboxed Mermaid diagrams.
 - Native goal/permission controls when supported by your Codex version.
 - Device revocation and opt-in Web Push with generic notification content.

@@ -19,12 +19,13 @@ from codex_remote.server import Gateway, APIError, APPROVALS
 from codex_remote.commands import CommandMixin
 from codex_remote.diagnostics import explain_error, writer_conflict, model_error_text
 from codex_remote.conversation_list import visibility_fields
+from codex_remote.artifacts import ArtifactMixin
 
 ELICITATION = "mcpServer/elicitation/request"
 APPROVALS.add(ELICITATION)
 
 
-class RemoteGateway(CommandMixin, Gateway):
+class RemoteGateway(ArtifactMixin, CommandMixin, Gateway):
     def __init__(self, state, workspaces, command, sandbox="workspace-write", approval="on-request",
                  rpc_factory=None, shared=False, background=True, browse_existing=False):
         self.state_path = state
@@ -52,6 +53,7 @@ class RemoteGateway(CommandMixin, Gateway):
                 CREATE TABLE IF NOT EXISTS queue(id TEXT PRIMARY KEY,thread_id TEXT,body TEXT,status TEXT,created REAL);
                 CREATE TABLE IF NOT EXISTS uploads(id TEXT PRIMARY KEY,name TEXT,path TEXT,mime TEXT,size INTEGER);
                 CREATE TABLE IF NOT EXISTS viewed_images(thread_id TEXT,item_id TEXT,path TEXT,PRIMARY KEY(thread_id,item_id));
+                CREATE TABLE IF NOT EXISTS file_links(thread_id TEXT,item_id TEXT,links TEXT,digest TEXT,PRIMARY KEY(thread_id,item_id));
                 CREATE TABLE IF NOT EXISTS notices(id INTEGER PRIMARY KEY AUTOINCREMENT,thread_id TEXT,kind TEXT,created REAL,seen INTEGER DEFAULT 0);
             """)
         initialize_uploads(self.store)
@@ -623,6 +625,7 @@ class RemoteGateway(CommandMixin, Gateway):
         return rows[0]
 
     def _remember_images(self, tid, turns):
+        self._remember_files(tid, turns)
         for turn in turns:
             for item in turn.get("items", []):
                 if item.get("type") == "imageView" and isinstance(item.get("path"), str) and item.get("id"):
@@ -691,8 +694,8 @@ class RemoteGateway(CommandMixin, Gateway):
                         continue
                     entries.append({"name": child.name, "directory": child.is_dir(), "path": str(child.relative_to(root))})
                 return {"directory": True, "path": str(path.relative_to(root)), "entries": entries, "limited": len(entries) == 1000}
-            if not path.is_file() or path.stat().st_size > 10 * 1024 * 1024:
-                raise APIError(413, "File is unreadable or exceeds 10 MiB.")
+            if not path.is_file():
+                raise APIError(400, "This link points to a directory or a non-regular file. Ask Codex to create an archive first.")
             return {"directory": False, "path": str(path), "name": path.name}
         except (OSError, ValueError):
             raise APIError(404, "File or directory not found.")

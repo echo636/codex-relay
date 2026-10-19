@@ -8,20 +8,47 @@
     cache.set(key, value); return value;
   }
   function safeLink(value) {
+    if (localFilePath(value) !== null) return true;
     try { return ['http:', 'https:', 'mailto:'].includes(new URL(value, location.href).protocol); }
     catch (_) { return false; }
   }
   md.validateLink = safeLink;
+  function localFilePath(value) {
+    if (typeof value !== 'string' || value.length > 8192) return null;
+    let path = value.split('#', 1)[0].split('?', 1)[0].replace(/:\d+(?::\d+)?$/, '');
+    if (!path || path.startsWith('//') || path.startsWith('/api/')) return null;
+    try {
+      if (/^[a-z][a-z0-9+.-]*:/i.test(path)) {
+        const url = new URL(path);
+        if (!['file:', 'sandbox:'].includes(url.protocol) || !['', 'localhost'].includes(url.hostname)) return null;
+        path = url.pathname;
+      }
+      path = decodeURIComponent(path);
+      return path && path.length <= 4096 && !/[\x00-\x1f\x7f]/.test(path) ? path : null;
+    } catch (_) { return null; }
+  }
+  function fileURL(href, env) {
+    if (localFilePath(href) === null || !env.threadId || !env.itemId) return null;
+    return '/api/threads/' + encodeURIComponent(env.threadId) + '/artifact?' + new URLSearchParams({itemId: env.itemId, path: href});
+  }
   md.renderer.rules.link_open = (tokens, index, options, env, self) => {
+    const url = fileURL(tokens[index].attrGet('href'), env);
+    if (url) {
+      tokens[index].attrSet('href', url); tokens[index].attrSet('download', '');
+      tokens[index].attrSet('class', 'md-file-link'); tokens[index].attrSet('title', I18n.t('Download file'));
+      return self.renderToken(tokens, index, options);
+    }
     tokens[index].attrSet('target', '_blank');
     tokens[index].attrSet('rel', 'noopener noreferrer');
     return self.renderToken(tokens, index, options);
   };
   // External images stay explicit links: rendering a reply must not contact a
   // third party. Uploaded images can use our authenticated, same-origin route.
-  md.renderer.rules.image = (tokens, index) => {
+  md.renderer.rules.image = (tokens, index, options, env) => {
     const token = tokens[index], src = token.attrGet('src') || '';
     const alt = md.renderer.renderInlineAsText(token.children || [], md.options, {});
+    const download = fileURL(src, env);
+    if (download) return '<a class="md-file-link" download href="' + escape(download) + '" title="' + escape(I18n.t('Download file')) + '">' + escape(alt || I18n.t('Download image')) + '</a>';
     if (!safeLink(src)) return escape(alt);
     const url = new URL(src, location.href);
     if (url.origin === location.origin && /^\/api\/uploads\/[a-f0-9]{32}$/.test(url.pathname) && !url.search) {
@@ -179,10 +206,27 @@
   }
   function bindCopy(parent) {
     parent.removeEventListener('click', copyCode); parent.addEventListener('click', copyCode);
+    parent.removeEventListener('click', downloadFile); parent.addEventListener('click', downloadFile);
   }
-  function markdown(parent, text, complete = true) {
+  async function downloadFile(event) {
+    const link = event.target.closest('a.md-file-link');
+    if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (link.getAttribute('aria-busy') === 'true') return;
+    link.setAttribute('aria-busy', 'true'); notice(I18n.t('Preparing download…'));
+    try {
+      // Validate first, so a missing file shows an error inside the conversation.
+      // The actual transfer uses a normal browser download, never a huge Blob.
+      const url = link.getAttribute('href'), info = await api(url + '&info=1');
+      const download = document.createElement('a'); download.href = url; download.download = info.name;
+      document.body.append(download); download.click(); download.remove();
+      notice(I18n.t('Download started: ') + info.name);
+    } catch (error) { notice(error.message); }
+    finally { link.removeAttribute('aria-busy'); }
+  }
+  function markdown(parent, text, complete = true, context = {}) {
     parent.classList.add('markdown');
-    try { parent.innerHTML = md.render(String(text), {complete, lines: String(text).split('\n')}); }
+    try { parent.innerHTML = md.render(String(text), {...context, complete, lines: String(text).split('\n')}); }
     catch (_) { parent.textContent = text; }
     bindCopy(parent);
     if (window.diagramRenderer) window.diagramRenderer.render(parent);

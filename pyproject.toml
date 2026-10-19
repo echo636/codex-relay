@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "codex_remote/static/vendor/*/LICENSE", "codex_remote/static/vendor/mermaid/THIRD_PARTY_NOTICES.txt"]
 authors = [{name = "Codex Relay contributors"}]
-dependencies = ["jsonschema>=4.23,<5", "pywebpush>=2.0,<3", "websockets>=15,<17", "cryptography>=43,<51"]
+dependencies = ["jsonschema>=4.23,<5", "pywebpush>=2.0,<3", "websockets>=15,<17", "cryptography>=43,<51", "markdown-it-py>=4,<5"]
 classifiers = ["Development Status :: 3 - Alpha", "Operating System :: POSIX :: Linux", "Programming Language :: Python :: 3", "Topic :: Software Development"]
 
 [project.scripts]

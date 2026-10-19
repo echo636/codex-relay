@@ -139,7 +139,7 @@ function renderItem(record) {
     const content = i.type === 'userMessage' ? (i.content || []).map(c => c.text || '[' + c.type + ']').join('\n') : i.text || '';
     const contentNode = el('div', 'content', content);
     if (i.type === 'userMessage' && window.remoteUI) window.remoteUI.userContent(contentNode, i.content || []);
-    if (i.type === 'agentMessage' && window.remoteUI) window.remoteUI.markdown(contentNode, content, record.done);
+    if (i.type === 'agentMessage' && window.remoteUI) window.remoteUI.markdown(contentNode, content, record.done, {threadId: state.current, itemId: i.id});
     node.append(contentNode);
     if (i.type === 'agentMessage' && window.remoteUI) window.remoteUI.questions(node, i);
     if (focused && node.contains(focused)) focused.focus({preventScroll: true});

@@ -4,3 +4,4 @@ jsonschema>=4.23,<5
 pywebpush>=2.0,<3
 websockets>=15,<17
 cryptography>=43,<51
+markdown-it-py>=4,<5
