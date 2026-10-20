@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Deliver the Mermaid sandbox as one compressed document with hash-restricted
+  scripts, eliminating opaque-frame script downloads and reducing transfer size.
+  Allow slow connections more time and distinguish loading from initialization errors.
+
 - Rename the project to Codex Relay and the repository to `echo636/codex-relay`.
 - Update the web/PWA branding and English/Chinese documentation; add `codex-relay`
   and `codex-relay-manage` command aliases. Existing commands, Python distribution

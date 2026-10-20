@@ -4,6 +4,7 @@ import argparse
 from codex_remote import __version__
 from codex_remote.storage import migrate
 from codex_remote.i18n import locale, translate
+from codex_remote.diagram_assets import renderer_document, accepts_gzip
 import collections
 import concurrent.futures
 import fcntl
@@ -469,7 +470,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass  # Do not log messages, credentials, cookies, or URL arguments.
 
-    def headers_out(self, status, mime="application/json; charset=utf-8", length=None, extra=None):
+    def headers_out(self, status, mime="application/json; charset=utf-8", length=None, extra=None, *, csp=None):
         self.send_response(status)
         self.send_header("Content-Type", mime)
         self.send_header("Cache-Control", "no-store")
@@ -482,7 +483,7 @@ class Handler(BaseHTTPRequestHandler):
             # Mermaid needs generated style elements. Keep them in an opaque
             # sandbox with no API/network access; the app only receives an image.
             policy = "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'; sandbox allow-scripts"
-        self.send_header("Content-Security-Policy", policy)
+        self.send_header("Content-Security-Policy", csp or policy)
         if length is not None:
             self.send_header("Content-Length", str(length))
         for k, v in (extra or {}).items():
@@ -571,6 +572,16 @@ class Handler(BaseHTTPRequestHandler):
                 files[path] = path.lstrip("/")
             if path not in files:
                 raise APIError(404, "Page not found.")
+            if path == "/mermaid-frame.html":
+                plain, compressed, policy = renderer_document(STATIC)
+                use_gzip = accepts_gzip(self.headers.get('Accept-Encoding', ''))
+                data = compressed if use_gzip else plain
+                headers = {"Vary": "Accept-Encoding"}
+                if use_gzip:
+                    headers["Content-Encoding"] = "gzip"
+                self.headers_out(200, "text/html; charset=utf-8", len(data), headers, csp=policy)
+                self.wfile.write(data)
+                return
             file = STATIC / files[path]
             data = file.read_bytes()
             mime = mimetypes.guess_type(file)[0] or "application/octet-stream"

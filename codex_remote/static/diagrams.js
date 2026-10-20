@@ -20,9 +20,9 @@
     frame.setAttribute('sandbox', 'allow-scripts'); frame.setAttribute('aria-hidden', 'true'); frame.tabIndex = -1;
     frame.title = I18n.t("Diagram renderer"); frame.src = '/mermaid-frame.html'; document.body.append(frame);
     readyTimer = setTimeout(() => {
-      loadError = new Error(I18n.t('Diagram renderer could not load. Check the connection and retry.'));
+      loadError = new Error(I18n.t('Diagram renderer timed out while loading. Retry or reload the page.'));
       resetFrame(loadError);
-    }, 30000);
+    }, 90000);
     return ready;
   }
   window.addEventListener('message', event => {
@@ -31,7 +31,7 @@
     if (data.type === 'mermaid-ready') {
       clearTimeout(readyTimer); if (resolveReady) resolveReady(); resolveReady = rejectReady = null;
     } else if (data.type === 'mermaid-load-error') {
-      loadError = new Error(I18n.t('Diagram renderer could not load. Check the connection and retry.'));
+      loadError = new Error(I18n.t('Diagram library could not start. Reload the page or update your browser.'));
       resetFrame(loadError);
     } else if (data.type === 'mermaid-result' && requests.has(data.id)) {
       const job = requests.get(data.id); requests.delete(data.id); clearTimeout(job.timer);

@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'codex-remote-shell-v20';
+const CACHE = 'codex-remote-shell-v21';
 const FONT_NAMES = ['AMS-Regular', 'Caligraphic-Bold', 'Caligraphic-Regular', 'Fraktur-Bold', 'Fraktur-Regular', 'Main-Bold', 'Main-BoldItalic', 'Main-Italic', 'Main-Regular', 'Math-BoldItalic', 'Math-Italic', 'SansSerif-Bold', 'SansSerif-Italic', 'SansSerif-Regular', 'Script-Regular', 'Size1-Regular', 'Size2-Regular', 'Size3-Regular', 'Size4-Regular', 'Typewriter-Regular'];
 const SHELL = ['/', '/i18n.js', '/locales/zh-CN.js', '/app.js', '/activity.js', '/theme.js', '/features.js', '/commands.js', '/commands.css', '/markdown.js', '/style.css', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png',
   '/vendor/markdown-it/markdown-it.min.js', '/vendor/katex/katex.min.js', '/vendor/katex/katex.min.css', '/vendor/highlight/highlight.min.js',

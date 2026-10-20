@@ -592,5 +592,7 @@
   "■ Turn interrupted": "■ 本轮已中断",
   "✓ Answers sent": "✓ 回答已发送",
   "✓ Turn completed": "✓ 本轮已完成",
-  "✕ Turn failed": "✕ 本轮失败"
+  "✕ Turn failed": "✕ 本轮失败",
+  "Diagram renderer timed out while loading. Retry or reload the page.": "图表渲染器加载超时，请重试或刷新页面。",
+  "Diagram library could not start. Reload the page or update your browser.": "绘图库初始化失败，请刷新页面或更新浏览器。"
 }

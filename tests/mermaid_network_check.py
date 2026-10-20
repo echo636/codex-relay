@@ -31,6 +31,10 @@ def main():
             browser = p.chromium.launch(headless=True, args=['--no-sandbox'], ignore_default_args=['--disable-dev-shm-usage'])
             for host in (['127.0.0.1', lan] if lan else ['127.0.0.1']):
                 page = browser.new_page(); errors, requests = [], []
+                # Simulate browsers/proxies rejecting script fetches from the
+                # opaque child. The renderer must work without either request.
+                page.route('**/vendor/mermaid/mermaid.min.js', lambda route: route.abort())
+                page.route('**/mermaid-frame.js', lambda route: route.abort())
                 page.on('pageerror', lambda error: errors.append(str(error)))
                 page.on('request', lambda request: requests.append(request.url))
                 h.web.origin = f'http://{host}:{h.port}'
@@ -47,23 +51,51 @@ def main():
                 frame = next(f for f in page.frames if f.url.endswith('/mermaid-frame.html'))
                 assert frame.evaluate('() => {try {return !!parent.document} catch(e) {return e.name}}') == 'SecurityError'
                 assert page.locator('iframe').get_attribute('sandbox') == 'allow-scripts'
+                assert frame.locator('script[src]').count() == 0
+                assert frame.evaluate('fetch("/api/bootstrap").then(() => "allowed").catch(e => e.name)') == 'TypeError'
+                frame.evaluate('''() => { const s = document.createElement('script');
+                    s.textContent = 'window.unapprovedScript = true'; document.body.append(s); }''')
+                assert frame.evaluate('typeof window.unapprovedScript') == 'undefined'
                 assert all(url.startswith(h.web.origin) or url.startswith('data:') for url in requests)
                 assert not errors, errors
                 page.close()
-            print('PASS: isolated Mermaid rendering over loopback' + (' and LAN HTTP.' if lan else '; LAN test skipped (no private interface).'), flush=True)
+            print('PASS: single-document Mermaid, blocked child scripts, restricted script hashes and isolation over loopback' + (' and LAN HTTP.' if lan else '; LAN test skipped (no private interface).'), flush=True)
+
+            # At this rate the old 5.5 MB child script exceeds its 30 s
+            # deadline. The compressed, self-contained frame stays below it.
+            page = browser.new_page()
+            page.goto(h.web.origin + '/')
+            page.locator('#token').fill(h.token); page.locator('#login-form button').click()
+            expect(page.locator('#app')).to_be_visible()
+            cdp = page.context.new_cdp_session(page)
+            cdp.send('Network.enable')
+            cdp.send('Network.emulateNetworkConditions', {
+                'offline': False, 'latency': 80, 'downloadThroughput': 128 * 1024,
+                'uploadThroughput': 128 * 1024, 'connectionType': 'cellular3g'})
+            page.evaluate(r"""() => {
+                const root = document.createElement('div'); root.id = 'slow-probe'; document.body.prepend(root);
+                messageRenderer.markdown(root, '```mermaid\nflowchart TD\nA[开始] --> B[并行任务]\nB --> C{完成？}\nC --> D[结束]\n```', true);
+            }""")
+            expect(page.locator('#slow-probe .mermaid-block')).to_have_attribute('data-status', 'rendered', timeout=30000)
+            expect(page.locator('#slow-probe img')).to_be_visible()
+            page.close()
+            print('PASS: compressed renderer works over a throttled 128 KiB/s connection.', flush=True)
 
             # A failed load is visible and can recover without reloading the chat.
             page = browser.new_page()
             page.goto(h.web.origin + '/')
             page.locator('#token').fill(h.token); page.locator('#login-form button').click()
             expect(page.locator('#app')).to_be_visible()
+            page.clock.install()
             page.route('**/mermaid-frame.html', lambda route: route.abort(), times=1)
             page.evaluate(r"""() => {
                 const root = document.createElement('div'); root.id = 'retry-probe'; document.body.prepend(root);
                 messageRenderer.markdown(root, [1, 2, 3].map(n => '```mermaid\nflowchart LR\nRetry' + n + ' --> Done\n```').join('\n'), true);
             }""")
             block = page.locator('#retry-probe .mermaid-block')
-            expect(page.locator('#retry-probe .mermaid-block[data-status=error]')).to_have_count(3, timeout=35000)
+            expect(page.locator('iframe.mermaid-renderer')).to_have_count(1)
+            page.clock.fast_forward(90_001)
+            expect(page.locator('#retry-probe .mermaid-block[data-status=error]')).to_have_count(3, timeout=5000)
             assert all(node.get_attribute('open') is not None for node in block.locator('details').all())
             for _ in range(3): block.locator('.diagram-retry').first.click()
             expect(page.locator('#retry-probe .mermaid-block[data-status=rendered]')).to_have_count(3, timeout=15000)

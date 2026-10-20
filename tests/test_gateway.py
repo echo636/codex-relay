@@ -195,6 +195,41 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(self.send(tid, 'continue', 'continue-submission-123')[0], 200)
         self.until(lambda: self.gateway.thread(tid)['status'] == 'completed')
 
+    def test_mermaid_document_is_compressed_self_contained_and_hash_restricted(self):
+        import base64
+        import gzip
+        import hashlib
+        import re
+
+        status, plain, headers = self.request('/mermaid-frame.html')
+        self.assertEqual(status, 200)
+        self.assertNotIn(b'<script src=', plain)
+        self.assertEqual(headers['Vary'], 'Accept-Encoding')
+        scripts = re.findall(rb'<script>(.*?)</script>', plain, re.DOTALL)
+        self.assertEqual(len(scripts), 2)
+        policy = headers['Content-Security-Policy']
+        for script in scripts:
+            digest = base64.b64encode(hashlib.sha256(script).digest()).decode()
+            self.assertIn("'sha256-" + digest + "'", policy)
+        self.assertNotIn("script-src 'self'", policy)
+        self.assertNotIn("unsafe-eval", policy)
+        self.assertIn("sandbox allow-scripts", policy)
+        for accept, compressed in [('gzip', True), ('br, gzip;q=0.8', True),
+                                   ('gzip;q=0, *;q=1', False), ('identity', False)]:
+            conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
+            conn.request('GET', '/mermaid-frame.html', headers={'Accept-Encoding': accept})
+            response = conn.getresponse()
+            body = response.read()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(int(response.getheader('Content-Length')), len(body))
+            self.assertEqual(response.getheader('Content-Encoding'), 'gzip' if compressed else None)
+            if compressed:
+                self.assertEqual(gzip.decompress(body), plain)
+                self.assertLess(len(body), len(plain) * 0.4)
+            else:
+                self.assertEqual(body, plain)
+            conn.close()
+
     def test_static_assets_and_no_private_cache(self):
         for path in ['/', '/app.js', '/features.js', '/theme.js', '/activity.js', '/markdown.js', '/diagrams.js', '/mermaid-frame.js', '/commands.js', '/commands.css', '/style.css', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', *sorted(VENDOR_FILES)]:
             status, _, headers = self.request(path)
