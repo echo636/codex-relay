@@ -373,23 +373,31 @@
   $('recover-chat').onclick = () => action(forkSavedHistory);
   $('archive-chat').onclick = () => action(async () => { const t = state.threads.find(t => t.id === state.current); const archived = !t.archived; await api('/api/threads/' + state.current + '/archive', {archived}); $('show-archived').checked = archived; await refresh(); $('tools-dialog').close(); notice(archived ? I18n.t("Conversation archived. Restore it from the archive list.") : I18n.t("Conversation restored.")); }, 'tools-error');
   $('resync-chat').onclick = () => action(async () => { await api('/api/threads/' + state.current + '/attach', {refresh: true}); $('tools-dialog').close(); notice(I18n.t("Conversation synced.")); }, 'tools-error');
-  function efforts() {
-    const model = models.find(m => m.model === $('model-select').value);
+  function efforts(preferred = $('effort-select').value) {
+    const thread = state.threads.find(t => t.id === state.current);
+    const name = $('custom-model').value.trim() || $('model-select').value || thread?.model;
+    const model = models.find(m => m.model === name);
+    // Inheriting the conversation still has a concrete model. Only fall back
+    // to protocol values when a custom/default model has no capability metadata.
+    const supported = model?.supportedReasoningEfforts;
+    const choices = Array.isArray(supported)
+      ? supported.map(e => e.reasoningEffort).filter(v => typeof v === 'string' && v)
+      : ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
     $('effort-select').replaceChildren(el('option', '', I18n.t("Keep current settings"))); $('effort-select').firstChild.value = '';
-    const choices = model ? model.supportedReasoningEfforts.map(e => e.reasoningEffort) : ['low', 'medium', 'high', 'xhigh'];
-    for (const v of choices) { const o = el('option', '', v); o.value = v; $('effort-select').append(o); }
-    $('effort-select').value = settings.effort || '';
+    for (const v of new Set(choices)) { const o = el('option', '', v); o.value = v; $('effort-select').append(o); }
+    $('effort-select').value = choices.includes(preferred) ? preferred : '';
   }
   $('model-open').onclick = () => action(async () => {
     models = (await api('/api/models')).data; $('model-select').replaceChildren(); const inherit = el('option', '', I18n.t("Use current conversation")); inherit.value = ''; $('model-select').append(inherit);
     for (const m of models) { const o = el('option', '', m.displayName || m.model); o.value = m.model; $('model-select').append(o); }
     $('model-select').value = models.some(m => m.model === settings.model) ? settings.model : '';
     $('custom-model').value = settings.model && !$('model-select').value ? settings.model : '';
-    efforts(); const t = state.threads.find(t => t.id === state.current); $('model-current').textContent = t ? I18n.t("Current: ") + (t.model || I18n.t("Default model")) + ' · ' + (t.effort || I18n.t("Default reasoning effort")) : '';
+    efforts(settings.effort || ''); const t = state.threads.find(t => t.id === state.current); $('model-current').textContent = t ? I18n.t("Current: ") + (t.model || I18n.t("Default model")) + ' · ' + (t.effort || I18n.t("Default reasoning effort")) : '';
     $('model-dialog').showModal();
   });
-  $('model-select').onchange = efforts;
-  $('model-save').onclick = () => { settings.model = $('custom-model').value.trim() || $('model-select').value || null; settings.effort = $('effort-select').value || null; $('model-open').textContent = settings.model || I18n.t("Model settings"); $('model-dialog').close(); };
+  $('model-select').onchange = () => { $('custom-model').value = ''; efforts(); };
+  $('custom-model').oninput = () => efforts();
+  $('model-save').onclick = () => { settings.model = $('custom-model').value.trim() || $('model-select').value || null; settings.effort = $('effort-select').value || null; $('model-open').textContent = [settings.model || I18n.t("Model settings"), settings.effort].filter(Boolean).join(' · '); $('model-dialog').close(); };
   $('older').onclick = () => action(async () => {
     const tid = state.current, selection = state.selection;
     $('older').disabled = true; followLatest = false;

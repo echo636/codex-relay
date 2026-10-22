@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Show model-supported reasoning efforts, including `max` and `ultra`, when
+  inheriting the current conversation; refresh options for custom models and
+  display the saved effort beside the model button.
+
 - Deliver the Mermaid sandbox as one compressed document with hash-restricted
   scripts, eliminating opaque-frame script downloads and reducing transfer size.
   Allow slow connections more time and distinguish loading from initialization errors.
